@@ -1,0 +1,241 @@
+/*
+ * Copyright (c) 2021 Yonatan Schachter
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include "rpi_pico-common.dtsi"
+#include <zephyr/dt-bindings/display/ili9xxx.h>
+#include <zephyr/dt-bindings/dma/rpi_pico_dma.h>
+
+/ {
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
+			label = "LED";
+		};
+	};
+
+	pwm_leds {
+		compatible = "pwm-leds";
+		status = "disabled";
+		pwm_led0: pwm_led_0 {
+			pwms = <&pwm 9 PWM_MSEC(20) PWM_POLARITY_NORMAL>;
+			label = "PWM_LED";
+		};
+	};
+
+	aliases {
+		led0 = &led0;
+		pwm-led0 = &pwm_led0;
+	};
+
+	chosen {
+		zephyr,console = &uart1;
+		zephyr,shell-uart = &uart1;
+		zephyr,display = &pico_dm_gtm0375hi1t02_display;
+		// zephyr,touch = &ft5336_buydisplay_3_5_tft_touch_arduino;
+		// zephyr,touch = &pico_dm_gtm0375hi1t02_touch;
+		zephyr,touch = &pico_dm_qd3503728_touch;
+	};
+
+	lvgl_pointer {
+		compatible = "zephyr,lvgl-pointer-input";
+		// input = <&pico_dm_gtm0375hi1t02_touch>;
+		input = <&pico_dm_qd3503728_touch>;
+		// swap-xy;
+		// invert-x;
+		// invert-y;
+	};
+
+#if 0
+	mipi-dbi-bitbang {
+		compatible = "zephyr,mipi-dbi-bitbang";
+		#size-cells = <0>;
+		#address-cells = <1>;
+		dc-gpios = <&gpio0 20 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 18 GPIO_ACTIVE_LOW>;
+		rd-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		wr-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+		cs-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
+
+		data-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>,
+			     <&gpio0 1 GPIO_ACTIVE_HIGH>,
+			     <&gpio0 2 GPIO_ACTIVE_HIGH>,
+			     <&gpio0 3 GPIO_ACTIVE_HIGH>,
+			     <&gpio0 4 GPIO_ACTIVE_HIGH>,
+			     <&gpio0 5 GPIO_ACTIVE_HIGH>,
+			     <&gpio0 6 GPIO_ACTIVE_HIGH>,
+			     <&gpio0 7 GPIO_ACTIVE_HIGH>;
+
+		pico_dm_gtm0375hi1t02_display: ili9488@0 {
+			compatible = "ilitek,ili9488";
+			mipi-max-frequency = <5000000>;
+			mipi-mode = "MIPI_DBI_MODE_8080_BUS_8_BIT";
+			reg = <0>;
+			pixel-format = <ILI9XXX_PIXEL_FORMAT_RGB565>;
+			width = <320>;
+			height = <480>;
+			rotation = <90>;
+			pgamctrl = [00 03 09 08 16 0a 3f 78 4c 09 0a 08 16 1a 0f];
+			ngamctrl = [00 16 19 03 0f 05 32 45 46 04 0e 0d 35 37 0f];
+			pwctrl1 = [17 15];
+			pwctrl2 = [41];
+			vmctrl = [00 12 80];
+			frmctr1 = [d0 14];
+			disctrl = [02 02 3b];
+		};
+	};
+#endif
+};
+
+&pinctrl {
+	pio1_mipi_dbi_default: pio1_mipi_dbi_default {
+		data-pins {
+			pinmux = <PIO1_P0>, <PIO1_P1>, <PIO1_P2>, <PIO1_P3>,
+				 <PIO1_P4>, <PIO1_P5>, <PIO1_P6>, <PIO1_P7>,
+				 <PIO1_P8>, <PIO1_P9>, <PIO1_P10>, <PIO1_P11>,
+				 <PIO1_P12>, <PIO1_P13>, <PIO1_P14>, <PIO1_P15>;
+		};
+		enwr-pins {
+			pinmux = <PIO1_P19>;
+		};
+	};
+
+	i2c1_remap: i2c1_remap {
+		group1 {
+			pinmux = <I2C1_SDA_P26>, <I2C1_SCL_P27>;
+			input-enable;
+			input-schmitt-enable;
+		};
+	};
+
+	uart0_remap: uart0_remap {
+		group1 {
+			pinmux = <UART0_TX_P16>;
+		};
+		group2 {
+			pinmux = <UART0_RX_P17>;
+			input-enable;
+		};
+	};
+
+	uart1_remap: uart1_remap {
+		group1 {
+			pinmux = <UART1_TX_P24>;
+		};
+		group2 {
+			pinmux = <UART1_RX_P25>;
+			input-enable;
+		};
+	};
+};
+
+&i2c1 {
+	status = "okay";
+	pinctrl-0 = <&i2c1_remap>;
+
+	// pico_dm_gtm0375hi1t02_touch: ns2009@48 {
+	// 	compatible = "nsiway,ns2009";
+	// 	reg = <0x48>;
+	// 	int-gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
+	// 	touchscreen-size-x = <320>;
+	// 	touchscreen-size-y = <480>;
+	// 	min-x = <5>;
+	// 	min-y = <0>;
+	// 	max-x = <415>;
+	// 	max-y = <265>;
+	// };
+
+	pico_dm_qd3503728_touch: ft5336@38 {
+		compatible = "focaltech,ft5336";
+		reg = <0x38>;
+		reset-gpios = <&gpio0 18 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&uart0 {
+	status = "okay";
+	pinctrl-0 = <&uart0_remap>;
+};
+
+&uart1 {
+	current-speed = <115200>;
+	status = "okay";
+	pinctrl-0 = <&uart1_remap>;
+	pinctrl-names = "default";
+};
+
+&dma {
+	status = "okay";
+};
+
+&pio0 {
+	status = "okay";
+};
+
+&pio1 {
+	status = "okay";
+
+	pico-mipi-dbi-pio {
+		dmas = <&dma 0 RPI_PICO_DMA_SLOT_PIO1_TX0 0x1>;
+		dma-names = "tx";
+		pinctrl-0 = <&pio1_mipi_dbi_default>;
+		pinctrl-names = "default";
+
+		compatible = "raspberrypi,pico-mipi-dbi-pio";
+		#size-cells = <0>;
+		#address-cells = <1>;
+		rs-gpios = <&gpio0 20 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+		rdwr-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		cs-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
+		data-pin-start = <0>;
+		enwr-pin = <19>;
+
+		pico_dm_gtm0375hi1t02_display: ili9488@0 {
+			compatible = "ilitek,ili9488";
+			mipi-max-frequency = <50000000>;
+			mipi-mode = "MIPI_DBI_MODE_8080_BUS_16_BIT";
+			reg = <0>;
+			pixel-format = <ILI9XXX_PIXEL_FORMAT_RGB565>;
+			width = <320>;
+			height = <480>;
+			rotation = <90>;
+			pgamctrl = [00 03 09 08 16 0a 3f 78 4c 09 0a 08 16 1a 0f];
+			ngamctrl = [00 16 19 03 0f 05 32 45 46 04 0e 0d 35 37 0f];
+			pwctrl1 = [17 15];
+			pwctrl2 = [41];
+			vmctrl = [00 12 80];
+			frmctr1 = [d0 14];
+			disctrl = [02 02 3b];
+		};
+	};
+};
+
+/*
+❯ ~/pico-sdk/src/rp2_common/hardware_clocks/scripts/vcocalc.py 240
+Requested: 240.0 MHz
+Achieved:  240.0 MHz
+REFDIV:    1
+FBDIV:     120 (VCO = 1440.0 MHz)
+PD1:       6
+PD2:       1
+*/
+// &pll_sys {
+// 	clock-div= <1>;
+// 	fb-div= <120>;
+// 	post-div1 = <6>;
+// 	post-div2 = <1>;
+// };
+
+// &clk_sys {
+// 	clock-frequency = <240000000>;
+// };
+
+// &clk_peri {
+// 	clock-frequency = <240000000>;
+// };

@@ -1,0 +1,15 @@
+# Copyright 2024 Stefan Gloor
+# SPDX-License-Identifier: Apache-2.0
+
+config MIPI_DBI_RPI_PICO_PIO
+	bool "Raspberry Pi PIO MIPI DBI driver"
+	default y
+	depends on DT_HAS_RASPBERRYPI_PICO_MIPI_DBI_PIO_ENABLED
+	select PICOSDK_USE_PIO
+	select PICOSDK_USE_CLAIM
+	select DMA
+	select PINCTRL
+	depends on RESET
+	help
+	  Enable support for Raspberry Pi Pico PIO MIPI DBI driver driver.
+	  This driver implements a MIPI-DBI B compatible controller using PIO.

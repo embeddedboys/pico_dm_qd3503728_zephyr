@@ -1,0 +1,54 @@
+# Copyright 2024 Stefan Gloor
+#
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  MIPI-DBI Mode A and B bit banging controller. This driver emulates MIPI DBI mode A and B (6800
+  and 8080 parallel interfaces) using GPIO pins.
+
+compatible: "raspberrypi,pico-mipi-dbi-pio"
+
+include:
+  [
+    "mipi-dbi-controller.yaml",
+    "pinctrl-device.yaml",
+    "raspberrypi,pico-pio-device.yaml",
+  ]
+
+properties:
+  rs-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Data/command GPIO pin. Set to low when sending a command, or high when sending data.
+
+  reset-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Reset GPIO pin. Set high to reset the display.
+
+  rdwr-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      RDWR Pin
+      GPIO to drive the RD(8080 mode, WR(6800 mode) pin.
+
+  cs-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Chip-select GPIO pin.
+
+  enwr-pin:
+    type: int
+    required: true
+    description: |
+      Pin select for WR(8080 mode), EN(6800 mode).
+
+  data-pin-start:
+    type: int
+    required: true
+    description: |
+      Start index of the data pin.
