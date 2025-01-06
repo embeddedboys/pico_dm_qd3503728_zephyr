@@ -1,29 +1,19 @@
 # Pico DM QD3503728 Zephyr Porting
 
-## How to
+这是 Pico_DM_QD3503728 的 Zephyr 移植说明。
 
-### Setup zephyr
+## 搭建 Zephyr 开发环境
 
-```bash
-```
+请先参考 Zephyr 官方 Getting Started Guide
 
-### Copy files
+[https://docs.zephyrproject.org/latest/develop/getting_started/index.html](https://docs.zephyrproject.org/latest/develop/getting_started/index.html)
 
-```bash
-TODO: add dts
-cp ./Kconfig.rpi_pico ~/zephyrproject/zephyr/drivers/mipi_dbi/Kconfig.rpi_pico
-cp ./mipi_dbi_rpi_pico_pio.c ~/zephyrproject/zephyr/drivers/mipi_dbi/mipi_dbi_rpi_pico_pio.c
-cp ./raspberrypi,pico-mipi-dbi-pio.yaml ~/zephyrproject/zephyr/dts/bindings/mipi-dbi/raspberrypi,pico-mipi-dbi-pio.yaml
-```
+zephyr 整个工程比较大，实际情况下，应该只下载当前板子相关的内容，具体方法待添加。
 
-### Build lvgl demo
+## Raspberry Pi Pico
 
-```bash
-west build -b rpi_pico  --pristine=always  samples/modules/lvgl/demos -- -DOPENOCD=/usr/local/bin/openocd -DOPENOCD_DEFAULT_PATH=/usr/local/share/openocd/scripts -DRPI_PICO_DEBUG_ADAPTER=cmsis-dap
-```
+参考 [rpi_pico](./rpi_pico/README.md)
 
-### Depoly firmware
+## Raspberry Pi Pico 2
 
-```bash
-west flash
-```
+待添加
