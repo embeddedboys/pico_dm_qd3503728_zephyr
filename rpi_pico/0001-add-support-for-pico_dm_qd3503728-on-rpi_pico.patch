@@ -1,0 +1,872 @@
+From c2b61afabee4d54520d15fae642ef096a2ec874c Mon Sep 17 00:00:00 2001
+From: Hua Zheng <hua.zheng@embeddedboys.com>
+Date: Tue, 7 Jan 2025 04:27:43 +0800
+Subject: [PATCH] add support for pico_dm_qd3503728 on rpi_pico
+
+Signed-off-by: Hua Zheng <hua.zheng@embeddedboys.com>
+---
+ boards/raspberrypi/common/rpi_pico-led.dtsi   |   2 +-
+ .../pico_dm_qd3503728/Kconfig.defconfig       |  25 ++
+ .../shields/pico_dm_qd3503728/Kconfig.shield  |   5 +
+ .../pico_dm_qd3503728.overlay                 | 152 +++++++
+ drivers/input/input_ft5336.c                  |  33 +-
+ drivers/mipi_dbi/CMakeLists.txt               |   1 +
+ drivers/mipi_dbi/Kconfig                      |   1 +
+ drivers/mipi_dbi/Kconfig.rpi_pico             |  15 +
+ drivers/mipi_dbi/mipi_dbi_rpi_pico_pio.c      | 387 ++++++++++++++++++
+ .../raspberrypi,pico-mipi-dbi-pio.yaml        |  54 +++
+ samples/modules/lvgl/demos/prj.conf           |  18 +-
+ samples/modules/lvgl/demos/src/main.c         |  17 +
+ 12 files changed, 691 insertions(+), 19 deletions(-)
+ create mode 100644 boards/shields/pico_dm_qd3503728/Kconfig.defconfig
+ create mode 100644 boards/shields/pico_dm_qd3503728/Kconfig.shield
+ create mode 100644 boards/shields/pico_dm_qd3503728/pico_dm_qd3503728.overlay
+ create mode 100644 drivers/mipi_dbi/Kconfig.rpi_pico
+ create mode 100644 drivers/mipi_dbi/mipi_dbi_rpi_pico_pio.c
+ create mode 100644 dts/bindings/mipi-dbi/raspberrypi,pico-mipi-dbi-pio.yaml
+
+diff --git a/boards/raspberrypi/common/rpi_pico-led.dtsi b/boards/raspberrypi/common/rpi_pico-led.dtsi
+index 951e36260f2..bdc24b6ab39 100644
+--- a/boards/raspberrypi/common/rpi_pico-led.dtsi
++++ b/boards/raspberrypi/common/rpi_pico-led.dtsi
+@@ -9,7 +9,7 @@
+ 	leds {
+ 		compatible = "gpio-leds";
+ 		led0: led_0 {
+-			gpios = <&gpio0 25 GPIO_ACTIVE_HIGH>;
++			gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
+ 			label = "LED";
+ 		};
+ 	};
+diff --git a/boards/shields/pico_dm_qd3503728/Kconfig.defconfig b/boards/shields/pico_dm_qd3503728/Kconfig.defconfig
+new file mode 100644
+index 00000000000..1c33854afec
+--- /dev/null
++++ b/boards/shields/pico_dm_qd3503728/Kconfig.defconfig
+@@ -0,0 +1,25 @@
++# Copyright (c) 2025 embeddedboys, Ltd.
++# SPDX-License-Identifier: Apache-2.0
++
++if SHIELD_PICO_DM_QD3503728
++
++if DISPLAY
++
++if INPUT
++
++endif # INPUT
++
++if LVGL
++
++choice LV_COLOR_DEPTH
++	default LV_COLOR_DEPTH_16
++endchoice
++
++config INPUT
++	default y
++
++endif # LVGL
++
++endif # DISPLAY
++
++endif # SHIELD_PICO_DM_QD3503728
+diff --git a/boards/shields/pico_dm_qd3503728/Kconfig.shield b/boards/shields/pico_dm_qd3503728/Kconfig.shield
+new file mode 100644
+index 00000000000..a6fa031b778
+--- /dev/null
++++ b/boards/shields/pico_dm_qd3503728/Kconfig.shield
+@@ -0,0 +1,5 @@
++# Copyright (c) 2025 embeddedboys, Ltd.
++# SPDX-License-Identifier: Apache-2.0
++
++config SHIELD_PICO_DM_QD3503728
++	def_bool $(shields_list_contains,pico_dm_qd3503728)
+\ No newline at end of file
+diff --git a/boards/shields/pico_dm_qd3503728/pico_dm_qd3503728.overlay b/boards/shields/pico_dm_qd3503728/pico_dm_qd3503728.overlay
+new file mode 100644
+index 00000000000..8128c094e21
+--- /dev/null
++++ b/boards/shields/pico_dm_qd3503728/pico_dm_qd3503728.overlay
+@@ -0,0 +1,152 @@
++/*
++ * Copyright (c) 2024 embeddedboys
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#include <zephyr/dt-bindings/display/ili9xxx.h>
++#include <zephyr/dt-bindings/dma/rpi-pico-dma-common.h>
++
++/ {
++	leds {
++		compatible = "gpio-leds";
++		led0: led_0 {
++			gpios = <&gpio0 28 GPIO_ACTIVE_HIGH>;
++			label = "LED";
++		};
++	};
++
++	chosen {
++		zephyr,console = &uart0;
++		zephyr,shell-uart = &uart0;
++		zephyr,display = &pico_dm_gtm0375hi1t02_display;
++		zephyr,touch = &pico_dm_qd3503728_touch;
++	};
++
++	lvgl_pointer {
++		compatible = "zephyr,lvgl-pointer-input";
++		input = <&pico_dm_qd3503728_touch>;
++	};
++};
++
++&pinctrl {
++	pio1_mipi_dbi_default: pio1_mipi_dbi_default {
++		data-pins {
++			pinmux = <PIO1_P0>, <PIO1_P1>, <PIO1_P2>, <PIO1_P3>,
++				 <PIO1_P4>, <PIO1_P5>, <PIO1_P6>, <PIO1_P7>,
++				 <PIO1_P8>, <PIO1_P9>, <PIO1_P10>, <PIO1_P11>,
++				 <PIO1_P12>, <PIO1_P13>, <PIO1_P14>, <PIO1_P15>;
++		};
++		enwr-pins {
++			pinmux = <PIO1_P19>;
++		};
++	};
++
++	i2c1_remap: i2c1_remap {
++		group1 {
++			pinmux = <I2C1_SDA_P26>, <I2C1_SCL_P27>;
++            bias-pull-up;
++			input-enable;
++			input-schmitt-enable;
++		};
++	};
++
++	uart0_remap: uart0_remap {
++		group1 {
++			pinmux = <UART0_TX_P16>;
++		};
++		group2 {
++			pinmux = <UART0_RX_P17>;
++			input-enable;
++		};
++	};
++};
++
++&i2c1 {
++	status = "okay";
++	pinctrl-0 = <&i2c1_remap>;
++
++	pico_dm_qd3503728_touch: ft5336@38 {
++		compatible = "focaltech,ft5336";
++		reg = <0x38>;
++		reset-gpios = <&gpio0 18 GPIO_ACTIVE_LOW>;
++	};
++};
++
++&uart0 {
++    current-speed = <115200>;
++	status = "okay";
++	pinctrl-0 = <&uart0_remap>;
++    pinctrl-names = "default";
++};
++
++&dma {
++	status = "okay";
++};
++
++&pio0 {
++	status = "okay";
++};
++
++&pio1 {
++	status = "okay";
++
++	pico-mipi-dbi-pio {
++		dmas = <&dma 0 RPI_PICO_DMA_SLOT_PIO1_TX0 0x1>;
++		dma-names = "tx";
++		pinctrl-0 = <&pio1_mipi_dbi_default>;
++		pinctrl-names = "default";
++
++		compatible = "raspberrypi,pico-mipi-dbi-pio";
++		#size-cells = <0>;
++		#address-cells = <1>;
++		rs-gpios = <&gpio0 20 GPIO_ACTIVE_HIGH>;
++		reset-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
++		rdwr-gpios = <&gpio0 29 GPIO_ACTIVE_HIGH>;
++		cs-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
++		data-pin-start = <0>;
++		enwr-pin = <19>;
++
++		pico_dm_gtm0375hi1t02_display: ili9488@0 {
++			compatible = "ilitek,ili9488";
++			mipi-max-frequency = <50000000>;
++			mipi-mode = "MIPI_DBI_MODE_8080_BUS_16_BIT";
++			reg = <0>;
++			pixel-format = <ILI9XXX_PIXEL_FORMAT_RGB565>;
++			width = <320>;
++			height = <480>;
++			rotation = <90>;
++			pgamctrl = [00 03 09 08 16 0a 3f 78 4c 09 0a 08 16 1a 0f];
++			ngamctrl = [00 16 19 03 0f 05 32 45 46 04 0e 0d 35 37 0f];
++			pwctrl1 = [17 15];
++			pwctrl2 = [41];
++			vmctrl = [00 12 80];
++			frmctr1 = [d0 14];
++			disctrl = [02 02 3b];
++		};
++	};
++};
++
++/*
++❯ ~/pico-sdk/src/rp2_common/hardware_clocks/scripts/vcocalc.py 240
++Requested: 240.0 MHz
++Achieved:  240.0 MHz
++REFDIV:    1
++FBDIV:     120 (VCO = 1440.0 MHz)
++PD1:       6
++PD2:       1
++*/
++// &pll_sys {
++// 	clock-div= <1>;
++// 	fb-div= <120>;
++// 	post-div1 = <6>;
++// 	post-div2 = <1>;
++// };
++
++// &clk_sys {
++// 	clock-frequency = <240000000>;
++// };
++
++// &clk_peri {
++// 	clock-frequency = <240000000>;
++// };
+diff --git a/drivers/input/input_ft5336.c b/drivers/input/input_ft5336.c
+index ee6f9a89c62..bb539eab865 100644
+--- a/drivers/input/input_ft5336.c
++++ b/drivers/input/input_ft5336.c
+@@ -106,24 +106,29 @@ static int ft5336_process(const struct device *dev)
+ 		 * We ignore the Event Flag because Zephyr only cares about
+ 		 * pressed / not pressed and not press down / lift up
+ 		 */
+-		r = i2c_burst_read_dt(&config->bus, REG_P1_XH, coords, sizeof(coords));
+-		if (r < 0) {
+-			return r;
+-		}
++		// r = i2c_burst_read_dt(&config->bus, REG_P1_XH, coords, sizeof(coords));
++		// if (r < 0) {
++		// 	return r;
++		// }
+ 
+-		row = ((coords[0] & POSITION_H_MSK) << 8U) | coords[1];
+-		col = ((coords[2] & POSITION_H_MSK) << 8U) | coords[3];
++		i2c_reg_read_byte_dt(&config->bus, REG_P1_XH, &coords[0]);
++		i2c_reg_read_byte_dt(&config->bus, REG_P1_XH + 1, &coords[1]);
++		i2c_reg_read_byte_dt(&config->bus, REG_P1_XH + 2, &coords[2]);
++		i2c_reg_read_byte_dt(&config->bus, REG_P1_XH + 3, &coords[3]);
+ 
+-		uint8_t touch_id = FIELD_GET(TOUCH_ID_MSK, coords[2]);
++		col = ((coords[0] & POSITION_H_MSK) << 8U) | coords[1];
++		row = ((coords[2]) << 8U) | coords[3];
+ 
+-		if (touch_id != TOUCH_ID_INVALID) {
++		// uint8_t touch_id = FIELD_GET(TOUCH_ID_MSK, coords[2]);
++
++		// if (touch_id != TOUCH_ID_INVALID) {
+ 			pressed = true;
+-			LOG_DBG("points: %d, touch_id: %d, row: %d, col: %d",
+-				 points, touch_id, row, col);
+-		} else {
+-			pressed = false;
+-			LOG_WRN("bad TOUCH_ID: row: %d, col: %d", row, col);
+-		}
++		// 	LOG_DBG("points: %d, touch_id: %d, row: %d, col: %d",
++		// 		 points, touch_id, row, col);
++		// } else {
++		// 	pressed = false;
++		// 	LOG_WRN("bad TOUCH_ID: row: %d, col: %d", row, col);
++		// }
+ 	} else  {
+ 		/* no touch = no press */
+ 		pressed = false;
+diff --git a/drivers/mipi_dbi/CMakeLists.txt b/drivers/mipi_dbi/CMakeLists.txt
+index 3bd1ee28473..1ca549f7e7f 100644
+--- a/drivers/mipi_dbi/CMakeLists.txt
++++ b/drivers/mipi_dbi/CMakeLists.txt
+@@ -8,6 +8,7 @@ zephyr_sources_ifdef(CONFIG_MIPI_DBI_SMARTBOND mipi_dbi_smartbond.c)
+ zephyr_sources_ifdef(CONFIG_MIPI_DBI_NXP_LCDIC mipi_dbi_nxp_lcdic.c)
+ zephyr_sources_ifdef(CONFIG_MIPI_DBI_NXP_FLEXIO_LCDIF mipi_dbi_nxp_flexio_lcdif.c)
+ zephyr_sources_ifdef(CONFIG_MIPI_DBI_STM32_FMC mipi_dbi_stm32_fmc.c)
++zephyr_sources_ifdef(CONFIG_MIPI_DBI_RPI_PICO_PIO mipi_dbi_rpi_pico_pio.c)
+ # Data bus width is used by the SDK driver and processes it as a compile time option
+ if(CONFIG_MIPI_DBI_NXP_FLEXIO_LCDIF)
+   dt_chosen(flexio0_lcd PROPERTY "zephyr,display")
+diff --git a/drivers/mipi_dbi/Kconfig b/drivers/mipi_dbi/Kconfig
+index ab3ac43c76e..d3e1ae2783b 100644
+--- a/drivers/mipi_dbi/Kconfig
++++ b/drivers/mipi_dbi/Kconfig
+@@ -27,5 +27,6 @@ source "drivers/mipi_dbi/Kconfig.smartbond"
+ source "drivers/mipi_dbi/Kconfig.nxp_lcdic"
+ source "drivers/mipi_dbi/Kconfig.nxp_flexio_lcdif"
+ source "drivers/mipi_dbi/Kconfig.stm32_fmc"
++source "drivers/mipi_dbi/Kconfig.rpi_pico"
+ 
+ endif
+diff --git a/drivers/mipi_dbi/Kconfig.rpi_pico b/drivers/mipi_dbi/Kconfig.rpi_pico
+new file mode 100644
+index 00000000000..3bf46c7366e
+--- /dev/null
++++ b/drivers/mipi_dbi/Kconfig.rpi_pico
+@@ -0,0 +1,15 @@
++# Copyright 2024 Stefan Gloor
++# SPDX-License-Identifier: Apache-2.0
++
++config MIPI_DBI_RPI_PICO_PIO
++	bool "Raspberry Pi PIO MIPI DBI driver"
++	default y
++	depends on DT_HAS_RASPBERRYPI_PICO_MIPI_DBI_PIO_ENABLED
++	select PICOSDK_USE_PIO
++	select PICOSDK_USE_CLAIM
++	select DMA
++	select PINCTRL
++	depends on RESET
++	help
++	  Enable support for Raspberry Pi Pico PIO MIPI DBI driver driver.
++	  This driver implements a MIPI-DBI B compatible controller using PIO.
+diff --git a/drivers/mipi_dbi/mipi_dbi_rpi_pico_pio.c b/drivers/mipi_dbi/mipi_dbi_rpi_pico_pio.c
+new file mode 100644
+index 00000000000..173bca04a63
+--- /dev/null
++++ b/drivers/mipi_dbi/mipi_dbi_rpi_pico_pio.c
+@@ -0,0 +1,387 @@
++/*
++ * Copyright (c) 2024, Zheng Hua
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++#define DT_DRV_COMPAT raspberrypi_pico_mipi_dbi_pio
++
++#include <zephyr/drivers/pinctrl.h>
++#include <zephyr/drivers/gpio.h>
++#include <zephyr/drivers/mipi_dbi.h>
++#include <zephyr/drivers/dma.h>
++
++#include <zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h>
++
++#include <hardware/pio.h>
++#include <hardware/clocks.h>
++
++#include <zephyr/logging/log.h>
++LOG_MODULE_REGISTER(mipi_dbi_rpi_pico_pio, CONFIG_MIPI_DBI_LOG_LEVEL);
++
++/* The MIPI DBI spec allows 8, 9, and 16 bits */
++#define MIPI_DBI_MAX_DATA_BUS_WIDTH 16
++
++#define BULK_DATA_BOUNDARY (4)
++
++struct stream {
++	const struct device *dma_dev;
++	uint32_t channel; /* stores the channel for dma */
++	struct dma_config dma_cfg;
++	struct dma_block_config dma_blk_cfg;
++};
++
++struct pio_mipi_dbi_config {
++	const struct device *piodev;
++	const struct pinctrl_dev_config *pcfg;
++
++	/* Parallel 8080 data GPIOs */
++	const uint8_t data_pin_start;
++
++	/* Read (type B) GPIO, Write(Type A) GPIO */
++	const struct gpio_dt_spec rdwr;
++
++	/* Write (type B) GPIO */
++	// const struct gpio_dt_spec wr;
++	const uint8_t enwr_pin;
++
++	/* Chip-select GPIO */
++	const struct gpio_dt_spec cs;
++
++	/* Command/Data GPIO */
++	const struct gpio_dt_spec rs;
++
++	/* Reset GPIO */
++	const struct gpio_dt_spec reset;
++};
++
++struct pio_mipi_dbi_data {
++	struct k_mutex lock;
++
++	/* Frequency of Write (type B) or Enable/strobe GPIO (type A) */
++	uint32_t frequency;
++	uint8_t data_bus_width;
++
++	/* PIO specific data */
++	PIO pio;
++	size_t sm;
++	float clock_div;
++	pio_sm_config sm_cfg;
++	bool pio_initialized;
++
++	struct stream dma_tx;
++	struct k_sem transfer_done;
++};
++
++RPI_PICO_PIO_DEFINE_PROGRAM(mipi_dbi_wr, 0, 1,
++	    //     .wrap_target
++    0x6010, //  0: out    pins, 16        side 0
++    0xb042, //  1: nop                    side 1
++            //     .wrap
++);
++
++static int pio_mipi_dbi_configure(struct pio_mipi_dbi_data * data, uint data_pin_start,
++				uint data_bus_width, uint clk_pin, float clk_div)
++{
++	pio_sm_config *cfg = &data->sm_cfg;
++	static uint32_t offset = 0;
++	PIO pio = data->pio;
++	uint sm = data->sm;
++
++	if (!data->pio_initialized) {
++		if (!pio_can_add_program(pio, RPI_PICO_PIO_GET_PROGRAM(mipi_dbi_wr))) {
++			return -EBUSY;
++		}
++		offset = pio_add_program(pio, RPI_PICO_PIO_GET_PROGRAM(mipi_dbi_wr));
++
++		pio_sm_set_consecutive_pindirs(pio, sm, clk_pin, 1, true);
++		*cfg = pio_get_default_sm_config();
++		sm_config_set_wrap(cfg,
++				offset + RPI_PICO_PIO_GET_WRAP_TARGET(mipi_dbi_wr),
++				offset + RPI_PICO_PIO_GET_WRAP(mipi_dbi_wr));
++		sm_config_set_sideset(cfg, 1, false, false);
++		sm_config_set_sideset_pins(cfg, clk_pin);
++		sm_config_set_fifo_join(cfg, PIO_FIFO_JOIN_TX);
++		sm_config_set_clkdiv(cfg, clk_div);
++
++		data->pio_initialized = true;
++	}
++
++	pio_sm_set_consecutive_pindirs(pio, sm, data_pin_start, data_bus_width, true);
++	sm_config_set_out_pins(cfg, data_pin_start, data_bus_width);
++	sm_config_set_out_shift(cfg, false, true, data_bus_width);
++	pio_sm_init(pio, sm, offset, cfg);
++	pio_sm_set_enabled(pio, sm, true);
++
++	return 0;
++}
++
++static inline void pio_mipi_dbi_put(PIO pio, uint sm, uint16_t x) {
++    while (pio_sm_is_tx_fifo_full(pio, sm))
++        ;
++    *(volatile uint16_t*)&pio->txf[sm] = x;
++}
++
++static inline void pio_mipi_dbi_wait_idle(PIO pio, uint sm) {
++    uint32_t sm_stall_mask = 1u << (sm + PIO_FDEBUG_TXSTALL_LSB);
++    pio->fdebug = sm_stall_mask;
++    while (!(pio->fdebug & sm_stall_mask))
++        ;
++}
++
++static int pio_mipi_dbi_cpu_wr(const struct device *dev, const uint8_t *data_buf, size_t len)
++{
++	struct pio_mipi_dbi_data *data = dev->data;
++
++	pio_mipi_dbi_wait_idle(data->pio, data->sm);
++
++	while (len--)
++		pio_mipi_dbi_put(data->pio, data->sm, *data_buf++);
++
++	pio_mipi_dbi_wait_idle(data->pio, data->sm);
++
++	return 0;
++}
++
++static void pio_mipi_dbi_dma_callback(const struct device *dev, void *arg,
++				      uint32_t channel, int status)
++{
++	const struct device *pio_mipi_dbi_dev = (void *)arg;
++	struct pio_mipi_dbi_data *data = pio_mipi_dbi_dev->data;
++
++	k_sem_give(&data->transfer_done);
++}
++
++static int pio_mipi_dbi_dma_wr(const struct device *dev, const uint8_t *data_buf,
++			       uint8_t data_size, size_t len)
++{
++	// const struct pio_mipi_dbi_config *config = dev->config;
++	struct pio_mipi_dbi_data *data = dev->data;
++	struct stream *stream = &data->dma_tx;
++	struct dma_block_config *blk_cfg;
++	PIO pio = data->pio;
++
++	blk_cfg = &stream->dma_blk_cfg;
++
++	/* tx direction has memory as source and periph as dest. */
++	blk_cfg->source_address = (uint32_t)data_buf;
++	blk_cfg->dest_address = (uint32_t)&pio->txf[data->sm];
++	blk_cfg->block_size = len / data_size;
++
++	stream->dma_cfg.head_block = &stream->dma_blk_cfg;
++	stream->dma_cfg.user_data = (void *)dev;
++	stream->dma_cfg.source_data_size = data_size;
++	stream->dma_cfg.dest_data_size = data_size;
++
++	dma_config(stream->dma_dev, stream->channel, &stream->dma_cfg);
++	dma_start(stream->dma_dev, stream->channel);
++
++	k_sem_take(&data->transfer_done, K_FOREVER);
++	return 0;
++}
++
++static int pio_mipi_dbi_write_buf_rs(const struct device *dev, const uint8_t *data_buf,
++				     uint8_t data_size, size_t len, uint8_t rs)
++{
++	const struct pio_mipi_dbi_config *config = dev->config;
++	gpio_pin_set_dt(&config->rs, rs);
++
++	if (len > BULK_DATA_BOUNDARY)
++		return pio_mipi_dbi_dma_wr(dev, data_buf, data_size, len);
++
++	return pio_mipi_dbi_cpu_wr(dev, data_buf, len);
++}
++
++static int pio_mipi_dbi_write_helper(const struct device *dev,
++					 const struct mipi_dbi_config *dbi_config, bool cmd_present,
++					 uint8_t cmd, const uint8_t *data_buf, size_t len)
++{
++	const struct pio_mipi_dbi_config *config = dev->config;
++	struct pio_mipi_dbi_data *data = dev->data;
++	int ret;
++
++	ret = k_mutex_lock(&data->lock, K_FOREVER);
++	if (ret < 0) {
++		return ret;
++	}
++
++	if ((dbi_config->mode == MIPI_DBI_MODE_6800_BUS_8_BIT) ||
++	    (dbi_config->mode == MIPI_DBI_MODE_8080_BUS_8_BIT)) {
++		data->data_bus_width = 8;
++	} else {
++		data->data_bus_width = 16;
++	}
++
++	pio_mipi_dbi_configure(data, config->data_pin_start,
++			data->data_bus_width, config->enwr_pin, data->clock_div);
++
++	/*
++	 * Before writing, 8080 bus need to assert the RD pin and
++	 * 6800 bus need to de-assert the WR pin.
++	 */
++	if (dbi_config->mode == MIPI_DBI_MODE_6800_BUS_8_BIT ||
++	    dbi_config->mode == MIPI_DBI_MODE_6800_BUS_16_BIT) {
++		gpio_pin_set_dt(&config->rdwr, 0);
++	} else {
++		gpio_pin_set_dt(&config->rdwr, 1);
++	}
++
++	switch (dbi_config->mode) {
++	case MIPI_DBI_MODE_8080_BUS_8_BIT:
++	case MIPI_DBI_MODE_6800_BUS_8_BIT:
++	case MIPI_DBI_MODE_8080_BUS_16_BIT:
++	case MIPI_DBI_MODE_6800_BUS_16_BIT:
++		gpio_pin_set_dt(&config->cs, 1);
++		if (cmd_present)
++			pio_mipi_dbi_write_buf_rs(dev, &cmd, sizeof(cmd), 1, 0);
++		if (len > 0)
++			pio_mipi_dbi_write_buf_rs(dev, (void *)data_buf,
++				(data->data_bus_width / 8), len, 1);
++		gpio_pin_set_dt(&config->cs, 0);
++		break;
++
++	default:
++		LOG_ERR("MIPI DBI mode %u is not supported.", dbi_config->mode);
++		ret = -ENOTSUP;
++	}
++
++	k_mutex_unlock(&data->lock);
++	return ret;
++}
++
++static int pio_mipi_dbi_command_write(const struct device *dev,
++					  const struct mipi_dbi_config *dbi_config, uint8_t cmd,
++					  const uint8_t *data_buf, size_t len)
++{
++	return pio_mipi_dbi_write_helper(dev, dbi_config, true, cmd, data_buf, len);
++}
++
++static int pio_mipi_dbi_write_display(const struct device *dev,
++					  const struct mipi_dbi_config *dbi_config,
++					  const uint8_t *framebuf,
++					  struct display_buffer_descriptor *desc,
++					  enum display_pixel_format pixfmt)
++{
++	ARG_UNUSED(pixfmt);
++	return pio_mipi_dbi_write_helper(dev, dbi_config, false, 0x0, framebuf, desc->buf_size);
++}
++
++static int pio_mipi_dbi_reset(const struct device *dev, k_timeout_t delay)
++{
++	const struct pio_mipi_dbi_config *config = dev->config;
++	int ret;
++
++	LOG_DBG("Performing hw reset.");
++
++	ret = gpio_pin_set_dt(&config->reset, 1);
++	if (ret < 0) {
++		return ret;
++	}
++	k_sleep(delay);
++	return gpio_pin_set_dt(&config->reset, 0);
++}
++
++static int pio_mipi_dbi_init(const struct device *dev)
++{
++	const struct pio_mipi_dbi_config *config = dev->config;
++	struct pio_mipi_dbi_data *data = dev->data;
++	const char *failed_pin = NULL;
++	size_t sm;
++	int ret;
++
++	data->pio = pio_rpi_pico_get_pio(config->piodev);
++
++	data->clock_div = ((float)clock_get_hz(clk_sys) / 2.f / data->frequency);
++	if (data->clock_div < 1.f) {
++		LOG_WRN("mipi-max-frequency is too fast, using 1.f as clock divider.\n");
++		data->clock_div = 1.f;
++	}
++
++	ret = pio_rpi_pico_allocate_sm(config->piodev, &sm);
++	if (ret < 0) {
++		LOG_ERR("Failed to allocate PIO state machine!\n");
++		return ret;
++	}
++	data->sm = sm;
++
++	if (gpio_is_ready_dt(&config->rs)) {
++		ret = gpio_pin_configure_dt(&config->rs, GPIO_OUTPUT_ACTIVE);
++		if (ret < 0) {
++			failed_pin = "rs";
++			goto fail;
++		}
++		gpio_pin_set_dt(&config->rs, 0);
++	}
++
++	if (gpio_is_ready_dt(&config->rdwr)) {
++		gpio_pin_configure_dt(&config->rdwr, GPIO_OUTPUT_ACTIVE);
++	}
++
++	if (gpio_is_ready_dt(&config->cs)) {
++		ret = gpio_pin_configure_dt(&config->cs, GPIO_OUTPUT_ACTIVE);
++		if (ret < 0) {
++			failed_pin = "cs";
++			goto fail;
++		}
++		gpio_pin_set_dt(&config->cs, 0);
++	}
++
++	if (gpio_is_ready_dt(&config->reset)) {
++		ret = gpio_pin_configure_dt(&config->reset, GPIO_OUTPUT_ACTIVE);
++		if (ret < 0) {
++			failed_pin = "reset";
++			goto fail;
++		}
++		gpio_pin_set_dt(&config->reset, 0);
++	}
++
++	k_sem_init(&data->transfer_done, 0, 1);
++
++	LOG_DBG("Bus clock: %dMHz\n", (int)((float)clock_get_hz(clk_sys) \
++				      / 2.f / data->clock_div / MHZ(1)));
++	return pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
++fail:
++	LOG_ERR("Failed to configure %s GPIO pin.", failed_pin);
++	return ret;
++}
++
++static DEVICE_API(mipi_dbi, pio_mipi_dbi_driver_api) = {
++	.reset = pio_mipi_dbi_reset,
++	.command_write = pio_mipi_dbi_command_write,
++	.write_display = pio_mipi_dbi_write_display
++};
++
++#define MIPI_DBI_RPI_PICO_PIO_INIT(n)                                                              \
++	PINCTRL_DT_INST_DEFINE(n);								   \
++	static const struct pio_mipi_dbi_config pio_mipi_dbi_config_##n = {			   \
++		.piodev = DEVICE_DT_GET(DT_INST_PARENT(n)),					   \
++		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),					   \
++		.data_pin_start = DT_INST_PROP_OR(n, data_pin_start, 0),                           \
++		.enwr_pin = DT_INST_PROP(n, enwr_pin),                                             \
++		.rdwr = GPIO_DT_SPEC_INST_GET_OR(n, rdwr_gpios, {}),                               \
++		.cs = GPIO_DT_SPEC_INST_GET_OR(n, cs_gpios, {}),                                   \
++		.rs = GPIO_DT_SPEC_INST_GET_OR(n, rs_gpios, {}),                             	   \
++		.reset = GPIO_DT_SPEC_INST_GET_OR(n, reset_gpios, {}),                             \
++	};                                                                                         \
++	static struct pio_mipi_dbi_data pio_mipi_dbi_data_##n = {                                  \
++		.frequency = DT_PROP(DT_CHOSEN(zephyr_display), mipi_max_frequency),               \
++		.dma_tx = {					                                   \
++			.dma_dev = DEVICE_DT_GET(DT_INST_DMAS_CTLR_BY_NAME(n, tx)),		   \
++			.channel = DT_INST_DMAS_CELL_BY_NAME(n, tx, channel),		           \
++			.dma_blk_cfg = {							   \
++				.source_addr_adj = DMA_ADDR_ADJ_INCREMENT,			   \
++				.dest_addr_adj   = DMA_ADDR_ADJ_NO_CHANGE,			   \
++			},									   \
++			.dma_cfg = {						                   \
++				.channel_direction = MEMORY_TO_PERIPHERAL,		           \
++				.dma_callback = pio_mipi_dbi_dma_callback,		           \
++				.block_count = 1,					           \
++				.dma_slot = DT_INST_DMAS_CELL_BY_NAME(n, tx, slot)	           \
++			}								           \
++		},                                                                                 \
++	};					                                                   \
++	DEVICE_DT_INST_DEFINE(n, pio_mipi_dbi_init, NULL, &pio_mipi_dbi_data_##n,                  \
++			      &pio_mipi_dbi_config_##n, POST_KERNEL,                               \
++			      CONFIG_MIPI_DBI_INIT_PRIORITY, &pio_mipi_dbi_driver_api);
++
++DT_INST_FOREACH_STATUS_OKAY(MIPI_DBI_RPI_PICO_PIO_INIT)
+diff --git a/dts/bindings/mipi-dbi/raspberrypi,pico-mipi-dbi-pio.yaml b/dts/bindings/mipi-dbi/raspberrypi,pico-mipi-dbi-pio.yaml
+new file mode 100644
+index 00000000000..50706dc835e
+--- /dev/null
++++ b/dts/bindings/mipi-dbi/raspberrypi,pico-mipi-dbi-pio.yaml
+@@ -0,0 +1,54 @@
++# Copyright 2024 Stefan Gloor
++#
++# SPDX-License-Identifier: Apache-2.0
++
++description: |
++  MIPI-DBI Mode A and B bit banging controller. This driver emulates MIPI DBI mode A and B (6800
++  and 8080 parallel interfaces) using GPIO pins.
++
++compatible: "raspberrypi,pico-mipi-dbi-pio"
++
++include:
++  [
++    "mipi-dbi-controller.yaml",
++    "pinctrl-device.yaml",
++    "raspberrypi,pico-pio-device.yaml",
++  ]
++
++properties:
++  rs-gpios:
++    type: phandle-array
++    required: true
++    description: |
++      Data/command GPIO pin. Set to low when sending a command, or high when sending data.
++
++  reset-gpios:
++    type: phandle-array
++    required: true
++    description: |
++      Reset GPIO pin. Set high to reset the display.
++
++  rdwr-gpios:
++    type: phandle-array
++    required: true
++    description: |
++      RDWR Pin
++      GPIO to drive the RD(8080 mode, WR(6800 mode) pin.
++
++  cs-gpios:
++    type: phandle-array
++    required: true
++    description: |
++      Chip-select GPIO pin.
++
++  enwr-pin:
++    type: int
++    required: true
++    description: |
++      Pin select for WR(8080 mode), EN(6800 mode).
++
++  data-pin-start:
++    type: int
++    required: true
++    description: |
++      Start index of the data pin.
+\ No newline at end of file
+diff --git a/samples/modules/lvgl/demos/prj.conf b/samples/modules/lvgl/demos/prj.conf
+index 3392d5c4fd3..a6bdee4dd12 100644
+--- a/samples/modules/lvgl/demos/prj.conf
++++ b/samples/modules/lvgl/demos/prj.conf
+@@ -1,18 +1,28 @@
+ CONFIG_MAIN_STACK_SIZE=4096
+-CONFIG_LOG=y
++# CONFIG_LOG=y
+ CONFIG_SHELL=y
+ 
+ CONFIG_LVGL=y
+-CONFIG_LV_Z_MEM_POOL_SIZE=49152
++CONFIG_LV_Z_MEM_POOL_SIZE=204800
++
++CONFIG_LV_Z_BUFFER_ALLOC_DYNAMIC=y
++CONFIG_LV_Z_DOUBLE_VDB=y
++CONFIG_LV_Z_VDB_SIZE=25
++CONFIG_LV_Z_VDB_ALIGN=16
++
+ CONFIG_LV_Z_SHELL=y
+-CONFIG_LV_USE_MONKEY=y
++# CONFIG_LV_USE_MONKEY=y
+ 
+ CONFIG_DISPLAY=y
+ CONFIG_INPUT=y
++CONFIG_INPUT_FT5336_PERIOD=33
+ 
+ CONFIG_LV_FONT_MONTSERRAT_12=y
+ CONFIG_LV_FONT_MONTSERRAT_14=y
+ CONFIG_LV_FONT_MONTSERRAT_16=y
+ 
+ # Benchmark Demo
+-CONFIG_LV_USE_FONT_COMPRESSED=y
++# CONFIG_LV_USE_FONT_COMPRESSED=y
++# CONFIG_LV_Z_DEMO_BENCHMARK=y
++CONFIG_LV_Z_DEMO_WIDGETS=y
++# CONFIG_LV_Z_DEMO_STRESS=y
+diff --git a/samples/modules/lvgl/demos/src/main.c b/samples/modules/lvgl/demos/src/main.c
+index 59ed84244a8..2aa35696552 100644
+--- a/samples/modules/lvgl/demos/src/main.c
++++ b/samples/modules/lvgl/demos/src/main.c
+@@ -6,6 +6,7 @@
+ 
+ #include <zephyr/kernel.h>
+ #include <zephyr/drivers/display.h>
++#include <zephyr/drivers/gpio.h>
+ #include <lvgl.h>
+ #include <lvgl_mem.h>
+ #include <lv_demos.h>
+@@ -15,9 +16,24 @@
+ #include <zephyr/logging/log.h>
+ LOG_MODULE_REGISTER(app);
+ 
++#define LED0_NODE DT_ALIAS(led0)
++static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
++
+ int main(void)
+ {
+ 	const struct device *display_dev;
++	int ret;
++
++	if (!gpio_is_ready_dt(&led)) {
++		return 0;
++	}
++
++	ret = gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
++	if (ret < 0) {
++		return 0;
++	}
++
++	gpio_pin_set_dt(&led, 0);
+ 
+ 	display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+ 	if (!device_is_ready(display_dev)) {
+@@ -45,6 +61,7 @@ int main(void)
+ #else
+ 	printf("lvgl in malloc mode\n");
+ #endif
++	gpio_pin_set_dt(&led, 1);
+ 	while (1) {
+ 		uint32_t sleep_ms = lv_task_handler();
+ 
+-- 
+2.34.1
+
