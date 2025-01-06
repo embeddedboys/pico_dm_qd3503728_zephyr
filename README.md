@@ -1,5 +1,7 @@
 # Pico DM QD3503728 Zephyr Porting
 
+![logo](./assets/logo.svg)
+
 这是 Pico_DM_QD3503728 的 Zephyr 移植说明。
 
 ## 搭建 Zephyr 开发环境
