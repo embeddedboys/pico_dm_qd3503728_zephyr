@@ -1,6 +1,4 @@
-# Pico DM QD3503728 Zephyr Porting
-
-![logo](./assets/logo.svg)
+# Pico DM QD3503728 <img src="./assets/logo.svg" width="96"> Porting
 
 这是 Pico_DM_QD3503728 的 Zephyr 移植说明。
 
