@@ -10,6 +10,7 @@ cp 0001-add-support-for-pico_dm_qd3503728-on-rpi_pico.patch ~/zephyrproject/zeph
 
 cd ~/zephyrproject/zephyr
 git checkout 802eac71f0020646a2db6f4f12b5ceb358294064
+west update
 
 git apply 0001-add-support-for-pico_dm_qd3503728-on-rpi_pico.patch
 ```
